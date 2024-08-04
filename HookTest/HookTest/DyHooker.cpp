@@ -10,6 +10,12 @@
 #include <dlfcn.h>
 #include "fishhook/fishhook.h"
 
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
+}
+
 struct custom_data {
     ffi_type *returnType;
     ffi_type** argTypes;
@@ -157,7 +163,7 @@ void hook_func(const char* framework, const char* symbol, int8_t returnType, int
     
     ffi_type* ffi_return_type = getFFIType(returnType);
     
-    ffi_type** ffi_arg_types = new ffi_type*[4];
+    ffi_type** ffi_arg_types = new ffi_type*[argCount];
     for (int8_t i = 0; i < argCount; i++) {
         ffi_arg_types[i] = getFFIType(argTypes[i]);
     }
@@ -169,4 +175,88 @@ void hook_func(const char* framework, const char* symbol, int8_t returnType, int
     
     // 进行符号替换
     rebind_function(symbol, origin_func_pointer, replacement_func_pointer);
+}
+
+void call_func(const char* framework, const char* symbol, int8_t returnType, int8_t* argTypes, int8_t argCount, void* ret, void** args) {
+    void* handle = dlopen(framework, RTLD_NOLOAD | RTLD_NOW | RTLD_GLOBAL);
+    if (!handle) {
+        printf("Failed to open lib: ");
+        return;
+    }
+    
+    // 清除任何现有的错误
+    const char* dlsym_error = dlerror();
+    if (dlsym_error) {
+        printf("Failed to load symbol: %s", dlsym_error);
+        dlclose(handle);
+        return;
+    }
+    
+    void* func_pointer = dlsym(handle, symbol);
+    const char* dlsym_error2 = dlerror();
+    if (dlsym_error2) {
+        printf("Failed to load symbol: %s", dlsym_error2);
+        dlclose(handle);
+        return;
+    }
+    
+    ffi_type* ffi_return_type = getFFIType(returnType);
+    
+    ffi_type** ffi_arg_types = new ffi_type*[argCount];
+    for (int8_t i = 0; i < argCount; i++) {
+        ffi_arg_types[i] = getFFIType(argTypes[i]);
+    }
+    ffi_cif cif;
+    if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, argCount, ffi_return_type, ffi_arg_types) == FFI_OK) {
+        ffi_call(&cif, FFI_FN(func_pointer), &ret, args);
+        printf("result: ");
+    } else {
+        printf("Failed to prepare CIF in replacement_function");
+    }
+}
+
+// Lua包装器
+int l_cpp_function(lua_State* L) {
+    // 第一个参数：string
+    const char* funcName = luaL_checkstring(L, 1);
+
+    // 第二个参数：array (table)
+    luaL_checktype(L, 2, LUA_TTABLE);
+    int argCount = luaL_len(L, 2);
+    int8_t returnType;
+    int8_t argTypes[argCount-1];
+    printf("Array length: %d\n", argCount);
+    for (int i = 1; i <= argCount; i++) {
+        lua_rawgeti(L, 2, i);
+        int8_t value = lua_tointeger(L, -1);
+        printf("Array[%d] = %d\n", i, value);
+        lua_pop(L, 1);
+        
+        if (i == 1) {
+            returnType = value;
+        } else {
+            argTypes[i - 2] = value;
+        }
+    }
+
+    // 第三个参数：int
+    int arg1 = luaL_checkinteger(L, 3);
+
+    // 第四个参数：int
+    int arg2 = luaL_checkinteger(L, 4);
+    
+    int args[argCount];
+    args[0] = arg1;
+    args[1] = arg2;
+    
+    int *returnValue = NULL;
+    call_func("HookFramework.framework/HookFramework", funcName, returnType, argTypes, argCount-1, (void *)returnValue, (void **)&args);
+    
+    lua_pushinteger(L, *returnValue);         // 将结果推回Lua栈
+    return 1;                           // 返回值的数量
+}
+
+// 注册函数
+void register_with_lua(lua_State* L) {
+    lua_register(L, "callCppFunction", l_cpp_function);  // 将cpp_function注册为Lua全局函数
 }

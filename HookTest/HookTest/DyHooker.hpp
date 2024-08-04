@@ -10,6 +10,10 @@
 
 #include <stdio.h>
 
+extern "C" {
+#include "lua.h"
+}
+
 #define DYH_TYPE_VOID       0
 #define DYH_TYPE_INT        1
 #define DYH_TYPE_FLOAT      2
@@ -25,6 +29,8 @@
 #define DYH_TYPE_STRUCT     13
 #define DYH_TYPE_POINTER    14
 #define DYH_TYPE_COMPLEX    15
+
+void register_with_lua(lua_State* L);
 
 void hook_func(const char* framework, const char* symbol, int8_t returnType, int8_t* argTypes, int8_t argCount);
 
