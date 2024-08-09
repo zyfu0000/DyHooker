@@ -34,7 +34,6 @@ extern "C" {
     int8_t argTypes[2];
     argTypes[0] = DYH_TYPE_INT;
     argTypes[1] = DYH_TYPE_INT;
-//    hook_func("HookFramework.framework/HookFramework", "hook_c_func", DYH_TYPE_INT, argTypes, 2);
     hook_func("HookFramework.framework/HookFramework", "_Z11hook_c_funcii", DYH_TYPE_INT, argTypes, 2);
 }
 
@@ -56,21 +55,22 @@ static void *run(void *arg) {
 //        pthread_create(threads+i, NULL, run, jobs+i);
 //    }
     
-    // 在某处初始化Lua
+//     在某处初始化Lua
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
     register_with_lua(L);
     
+    NSString *filePath = [[NSBundle mainBundle] pathForResource:@"script" ofType:@"lua"];
     // 运行Lua脚本
-        if (luaL_dofile(L, "script.lua") != LUA_OK) {
-            const char *error = lua_tostring(L, -1);
-            printf("Error: %s\n", error);
-            lua_pop(L, 1);  // 从栈中移除错误信息
-        }
+    if (luaL_dofile(L, [filePath UTF8String]) != LUA_OK) {
+        const char *error = lua_tostring(L, -1);
+        printf("Error: %s\n", error);
+        lua_pop(L, 1);  // 从栈中移除错误信息
+    }
 
-        lua_close(L);  // 关闭Lua环境
+    lua_close(L);  // 关闭Lua环境
     
-    hook_c_func(1, 2);
+//    hook_c_func(1, 2);
 }
 
 

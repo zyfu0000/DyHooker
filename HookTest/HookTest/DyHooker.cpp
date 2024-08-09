@@ -28,7 +28,7 @@ void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) 
     custom_data *customData = (custom_data *)userdata;
     ffi_cif cif2;
     if (ffi_prep_cif(&cif2, FFI_DEFAULT_ABI, customData->argCount, customData->returnType, customData->argTypes) == FFI_OK) {
-        ffi_call(&cif2, FFI_FN(customData->origin_func_pointer), &ret, args);
+        ffi_call(&cif2, FFI_FN(customData->origin_func_pointer), ret, args);
         printf("result: ");
     } else {
         printf("Failed to prepare CIF in replacement_function");
@@ -208,8 +208,7 @@ void call_func(const char* framework, const char* symbol, int8_t returnType, int
     }
     ffi_cif cif;
     if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, argCount, ffi_return_type, ffi_arg_types) == FFI_OK) {
-        ffi_call(&cif, FFI_FN(func_pointer), &ret, args);
-        printf("result: ");
+        ffi_call(&cif, FFI_FN(func_pointer), ret, args);
     } else {
         printf("Failed to prepare CIF in replacement_function");
     }
@@ -245,14 +244,14 @@ int l_cpp_function(lua_State* L) {
     // 第四个参数：int
     int arg2 = luaL_checkinteger(L, 4);
     
-    int args[argCount];
-    args[0] = arg1;
-    args[1] = arg2;
+    int *args[argCount];
+    args[0] = &arg1;
+    args[1] = &arg2;
     
-    int *returnValue = NULL;
-    call_func("HookFramework.framework/HookFramework", funcName, returnType, argTypes, argCount-1, (void *)returnValue, (void **)&args);
+    int returnValue = 0;
+    call_func("HookFramework.framework/HookFramework", funcName, returnType, argTypes, argCount-1, (void *)&returnValue, (void **)args);
     
-    lua_pushinteger(L, *returnValue);         // 将结果推回Lua栈
+    lua_pushinteger(L, returnValue);         // 将结果推回Lua栈
     return 1;                           // 返回值的数量
 }
 
