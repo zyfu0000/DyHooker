@@ -6,9 +6,10 @@
 //
 
 #include "DyHooker.hpp"
-#import "libffi/include/ffi/ffi.h"
+#include "libffi/include/ffi/ffi.h"
 #include <dlfcn.h>
 #include "fishhook/fishhook.h"
+#include <map>
 
 extern "C" {
 #include "lua.h"
@@ -16,12 +17,16 @@ extern "C" {
 #include "lualib.h"
 }
 
+#include <LuaBridge.h>
+
 struct custom_data {
     ffi_type *returnType;
     ffi_type** argTypes;
     int8_t argCount;
     void *origin_func_pointer;
 };
+
+const std::unordered_map<std::string, std::string> symbolMap = {{"HookFramwork", ""}};
 
 void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) {
     // 调用原实现
@@ -255,7 +260,29 @@ int l_cpp_function(lua_State* L) {
     return 1;                           // 返回值的数量
 }
 
+int l_hook_cpp_function(lua_State* L) {
+    const char* frameworkName = luaL_checkstring(L, 1);
+    const char* funcName = luaL_checkstring(L, 2);
+    
+    // 第三个参数：int
+//    int arg1 = luaL_checkinteger(L, 3);
+//    
+//    // 第四个参数：int
+//    int arg2 = luaL_checkinteger(L, 4);
+//    
+//    int *args[argCount];
+//    args[0] = &arg1;
+//    args[1] = &arg2;
+//    
+//    int returnValue = 0;
+//    call_func("HookFramework.framework/HookFramework", funcName, returnType, argTypes, argCount-1, (void *)&returnValue, (void **)args);
+//    
+//    lua_pushinteger(L, returnValue);         // 将结果推回Lua栈
+    return 1;                           // 返回值的数量
+}
+
 // 注册函数
 void register_with_lua(lua_State* L) {
     lua_register(L, "callCppFunction", l_cpp_function);  // 将cpp_function注册为Lua全局函数
+    lua_register(L, "hookCppFunction", l_hook_cpp_function);  // 将cpp_function注册为Lua全局函数
 }
