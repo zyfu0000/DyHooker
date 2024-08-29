@@ -33,8 +33,12 @@ void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) 
     // 调用原实现
     custom_data *customData = (custom_data *)userdata;
     
+    ffi_type *returnType = customData->returnType;
+    ffi_type** argTypes = customData->argTypes;
+    int8_t argCount = customData->argCount;
+    
     ffi_cif cif2;
-    if (ffi_prep_cif(&cif2, FFI_DEFAULT_ABI, customData->argCount, customData->returnType, customData->argTypes) == FFI_OK) {
+    if (ffi_prep_cif(&cif2, FFI_DEFAULT_ABI, argCount, returnType, argTypes) == FFI_OK) {
         ffi_call(&cif2, FFI_FN(customData->origin_func_pointer), ret, args);
         printf("result: ");
     } else {
@@ -50,24 +54,22 @@ void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) 
     lua_State* L = func->state();
     
     // 将参数推送到 Lua 栈
-    for (int i = 0; i < customData->argCount; ++i) {
-        int8_t argType = customData->argTypes[i];
-        if (argType == DYH_TYPE_INT) {
-                lua_pushinteger(L, *static_cast<int*>(args[i]));
-                break;
-            case ArgType::DOUBLE:
-                lua_pushnumber(L, *static_cast<double*>(args[i]));
-                break;
-            case ArgType::STRING:
-                lua_pushstring(L, static_cast<const char*>(args[i]));
-                break;
-            default:
-                throw std::runtime_error("Unsupported argument type");
+    for (int i = 0; i < argCount; ++i) {
+        ffi_type* argType = argTypes[i];
+        if (argType == &ffi_type_sint) {
+            lua_pushinteger(L, *static_cast<int*>(args[i]));
+        } else if (argType == &ffi_type_float) {
+            lua_pushnumber(L, *static_cast<float*>(args[i]));
+        } else if (argType == &ffi_type_double) {
+            lua_pushnumber(L, *static_cast<double*>(args[i]));
+        } else if (argType == &ffi_type_uint8) {
+            
         }
     }
+    lua_pushcclosure(L, <#lua_CFunction fn#>, <#int n#>)
     
     // 调用 Lua 函数
-    if (lua_pcall(L, numArgs, 1, 0) != LUA_OK) {
+    if (lua_pcall(L, argCount, 1, 0) != LUA_OK) {
         std::string error = lua_tostring(L, -1);
         lua_pop(L, 1);
         throw std::runtime_error("Error calling Lua function: " + error);
