@@ -17,7 +17,7 @@ extern "C" {
 #include "lualib.h"
 }
 
-#include <LuaBridge.h>
+#include <LuaBridge/LuaBridge.h>
 
 struct custom_data {
     ffi_type *returnType;
@@ -29,6 +29,18 @@ struct custom_data {
 
 const std::unordered_map<std::string, std::string> symbolMap = {{"HookFramwork", ""}};
 
+luabridge::LuaRef callLuaFunction(luabridge::LuaRef& func, const std::vector<luabridge::LuaRef>& args) {
+    lua_State* L = func.state();
+    func.push(L);
+    for (const auto& arg : args) {
+        arg.push();
+    }
+    if (lua_pcall(L, args.size(), 1, 0) != LUA_OK) {
+        throw luabridge::LuaException(L, makeErrorCode(luabridge::ErrorCode::LuaFunctionCallFailed));
+    }
+    return luabridge::LuaRef::fromStack(L, -1);
+}
+
 void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) {
     // 调用原实现
     custom_data *customData = (custom_data *)userdata;
@@ -37,49 +49,52 @@ void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) 
     ffi_type** argTypes = customData->argTypes;
     int8_t argCount = customData->argCount;
     
-    ffi_cif cif2;
-    if (ffi_prep_cif(&cif2, FFI_DEFAULT_ABI, argCount, returnType, argTypes) == FFI_OK) {
-        ffi_call(&cif2, FFI_FN(customData->origin_func_pointer), ret, args);
-        printf("result: ");
-    } else {
-        printf("Failed to prepare CIF in replacement_function");
-    }
+//    ffi_cif cif2;
+//    if (ffi_prep_cif(&cif2, FFI_DEFAULT_ABI, argCount, returnType, argTypes) == FFI_OK) {
+//        ffi_call(&cif2, FFI_FN(customData->origin_func_pointer), ret, args);
+//        printf("result: ");
+//    } else {
+//        printf("Failed to prepare CIF in replacement_function");
+//    }
     
     // call lua function
-    luabridge::LuaRef *func = customData->luaFunc;
-    if (!func->isFunction()) {
+    luabridge::LuaRef *luaFunc = customData->luaFunc;
+    if (!luaFunc->isFunction()) {
         throw std::runtime_error("LuaRef is not a function");
     }
     
-    lua_State* L = func->state();
+    lua_State* L = luaFunc->state();
     
-    // 将参数推送到 Lua 栈
+    std::vector<luabridge::LuaRef> luaArgs;
     for (int i = 0; i < argCount; ++i) {
         ffi_type* argType = argTypes[i];
         if (argType == &ffi_type_sint) {
-            lua_pushinteger(L, *static_cast<int*>(args[i]));
+            luaArgs.push_back(luabridge::LuaRef(L, *static_cast<int*>(args[i])));
         } else if (argType == &ffi_type_float) {
-            lua_pushnumber(L, *static_cast<float*>(args[i]));
+            luaArgs.push_back(luabridge::LuaRef(L, *static_cast<float*>(args[i])));
         } else if (argType == &ffi_type_double) {
-            lua_pushnumber(L, *static_cast<double*>(args[i]));
+            luaArgs.push_back(luabridge::LuaRef(L, *static_cast<double*>(args[i])));
         } else if (argType == &ffi_type_uint8) {
             
         }
     }
-    lua_pushcclosure(L, <#lua_CFunction fn#>, <#int n#>)
+//    lua_pushcclosure(L, <#lua_CFunction fn#>, <#int n#>)
     
-    // 调用 Lua 函数
-    if (lua_pcall(L, argCount, 1, 0) != LUA_OK) {
-        std::string error = lua_tostring(L, -1);
-        lua_pop(L, 1);
-        throw std::runtime_error("Error calling Lua function: " + error);
+    try {
+        luabridge::LuaRef result = callLuaFunction(*luaFunc, luaArgs);
+        if (returnType == &ffi_type_sint) {
+            *(int*)ret = result.unsafe_cast<int>();
+        } else if (returnType == &ffi_type_float) {
+            *(float*)ret = result.unsafe_cast<float>();
+        } else if (returnType == &ffi_type_double) {
+            *(double*)ret = result.unsafe_cast<double>();
+        } else if (returnType == &ffi_type_uint8) {
+            
+        }
+        std::cout << "Result: " << result << std::endl;
+    } catch (const luabridge::LuaException& e) {
+        std::cerr << "Error calling Lua function: " << e.what() << std::endl;
     }
-    
-    // 获取返回值
-    luabridge::LuaRef result(L, -1);
-    lua_pop(L, 1);
-    
-    return result;
 }
 
 // 使用 libffi 构造一个函数指针
@@ -185,7 +200,9 @@ ffi_type* getFFIType(int8_t type) {
 }
 
 void hook_func(const char* framework, const char* symbol, int8_t returnType, int8_t* argTypes, int8_t argCount, luabridge::LuaRef *func) {
-    void* handle = dlopen(framework, RTLD_NOLOAD | RTLD_NOW | RTLD_GLOBAL);
+    char realFramework[128];
+    sprintf(realFramework, "%s.framework/%s", framework, framework);
+    void* handle = dlopen(realFramework, RTLD_NOLOAD | RTLD_NOW | RTLD_GLOBAL);
     if (!handle) {
         printf("Failed to open lib: ");
         return;
@@ -331,8 +348,8 @@ int l_hook_cpp_function(const char* framework, const char* funcName, luabridge::
 
 // 注册函数
 void register_with_lua(lua_State* L) {
-    lua_register(L, "callCppFunction", l_cpp_function);  // 将cpp_function注册为Lua全局函数
-    
+    luabridge::getGlobalNamespace(L)
+        .addFunction("callCppFunction", l_cpp_function);
     luabridge::getGlobalNamespace(L)
         .addFunction("hookCppFunction", l_hook_cpp_function);
 }

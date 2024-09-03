@@ -1,26 +1,25 @@
 // https://github.com/kunitoki/LuaBridge3
 // Copyright 2020, Lucio Asnaghi
-// Copyright 2019, Dmitry Tarakanov
 // SPDX-License-Identifier: MIT
 
 #pragma once
 
 #include "detail/Stack.h"
 
-#include <unordered_map>
+#include <set>
 
 namespace luabridge {
 
 //=================================================================================================
 /**
- * @brief Stack specialization for `std::unordered_map`.
+ * @brief Stack specialization for `std::set`.
  */
-template <class K, class V>
-struct Stack<std::unordered_map<K, V>>
+template <class K>
+struct Stack<std::set<K>>
 {
-    using Type = std::unordered_map<K, V>;
-
-    [[nodiscard]] static Result push(lua_State* L, const Type& map)
+    using Type = std::set<K>;
+    
+    [[nodiscard]] static Result push(lua_State* L, const Type& set)
     {
 #if LUABRIDGE_SAFE_STACK_CHECKS
         if (! lua_checkstack(L, 3))
@@ -29,21 +28,20 @@ struct Stack<std::unordered_map<K, V>>
 
         StackRestore stackRestore(L);
 
-        lua_createtable(L, 0, static_cast<int>(map.size()));
+        lua_createtable(L, 0, static_cast<int>(set.size()));
 
-        for (auto it = map.begin(); it != map.end(); ++it)
+        auto it = set.cbegin();
+        for (lua_Integer tableIndex = 1; it != set.cend(); ++tableIndex, ++it)
         {
-            auto result = Stack<K>::push(L, it->first);
-            if (! result)
-                return result;
+            lua_pushinteger(L, tableIndex);
 
-            result = Stack<V>::push(L, it->second);
+            auto result = Stack<K>::push(L, *it);
             if (! result)
                 return result;
 
             lua_settable(L, -3);
         }
-        
+
         stackRestore.reset();
         return {};
     }
@@ -55,26 +53,22 @@ struct Stack<std::unordered_map<K, V>>
 
         const StackRestore stackRestore(L);
 
-        Type map;
+        Type set;
 
         int absIndex = lua_absindex(L, index);
         lua_pushnil(L);
 
         while (lua_next(L, absIndex) != 0)
         {
-            auto value = Stack<V>::get(L, -1);
-            if (! value)
+            auto item = Stack<K>::get(L, -1);
+            if (! item)
                 return makeErrorCode(ErrorCode::InvalidTypeCast);
 
-            auto key = Stack<K>::get(L, -2);
-            if (! key)
-                return makeErrorCode(ErrorCode::InvalidTypeCast);
-
-            map.emplace(*key, *value);
+            set.emplace(*item);
             lua_pop(L, 1);
         }
 
-        return map;
+        return set;
     }
 
     [[nodiscard]] static bool isInstance(lua_State* L, int index)

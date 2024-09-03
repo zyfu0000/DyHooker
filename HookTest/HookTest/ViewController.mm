@@ -31,10 +31,10 @@ extern "C" {
 //    argTypes[3] = DYH_TYPE_POINTER;
 //    hook_func("usr/lib/libSystem.dylib", "pthread_create", DYH_TYPE_INT, argTypes, 4);
     
-    int8_t argTypes[2];
-    argTypes[0] = DYH_TYPE_INT;
-    argTypes[1] = DYH_TYPE_INT;
-    hook_func("HookFramework.framework/HookFramework", "_Z11hook_c_funcii", DYH_TYPE_INT, argTypes, 2);
+//    int8_t argTypes[2];
+//    argTypes[0] = DYH_TYPE_INT;
+//    argTypes[1] = DYH_TYPE_INT;
+//    hook_func("HookFramework.framework/HookFramework", "_Z11hook_c_funcii", DYH_TYPE_INT, argTypes, 2);
 }
 
 #define N 5
@@ -68,9 +68,11 @@ static void *run(void *arg) {
         lua_pop(L, 1);  // 从栈中移除错误信息
     }
 
-    lua_close(L);  // 关闭Lua环境
+//    lua_close(L);  // 关闭Lua环境
     
-//    hook_c_func(1, 2);
+    int result =  hook_c_func(1, 2);
+    
+    printf("Error: %d\n", result);
 }
 
 

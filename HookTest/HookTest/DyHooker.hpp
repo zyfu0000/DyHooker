@@ -12,7 +12,11 @@
 
 extern "C" {
 #include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
 }
+
+#include <LuaBridge/LuaBridge.h>
 
 #define DYH_TYPE_VOID       0
 #define DYH_TYPE_INT        1
@@ -32,6 +36,6 @@ extern "C" {
 
 void register_with_lua(lua_State* L);
 
-void hook_func(const char* framework, const char* symbol, int8_t returnType, int8_t* argTypes, int8_t argCount);
+void hook_func(const char* framework, const char* symbol, int8_t returnType, int8_t* argTypes, int8_t argCount, luabridge::LuaRef *func);
 
 #endif /* DyHooker_hpp */
