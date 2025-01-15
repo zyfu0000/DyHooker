@@ -1,0 +1,26 @@
+local classObject = { className = "NSObject" }
+function classObject:new(o)
+    o = o or {}
+    setmetatable(o,self)
+    self.__index = function (self, key) --这里后面的self和前面的self是不一样的
+        return function(...)
+            local method = string.gsub(key,"_",":") -- 用冒号替换_，还原真实的函数名称，这里规定假如有两个__相连的表示真实的_符
+            method = string.gsub(method,"::","_")
+            --假如参数个数比:号多的话，要在最后添加:号
+            if #{...} > charAppearCount(method,":") then
+                method = method..":"
+            end
+            --遍历参数
+            local arglist = buildArgList(...)
+            printLog("call callC in classObject className:"..self.className.." method:"..method)
+            printLog("arglist")
+            printLog(tableToStr(arglist))
+            local ret = luapatch_core.callC(self.className,method,table.unpack(arglist))
+            if type(ret) == "userdata" then
+                return instanceObject:new({point = ret})
+            end
+            return ret
+        end
+    end
+    return o
+end

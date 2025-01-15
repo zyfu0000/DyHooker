@@ -1,8 +1,12 @@
-hookCppFunction("HookFramework", "_Z11hook_c_funcii", function(a, b)
+DyHookCore.useFunction("HookFramework", "_Z11hook_c_funcii", "int,int,int")
+
+
+DyHookCore.hookCppFunction("_Z11hook_c_funcii", function(a, b)
     -- local result = origin();
     -- return a + b + result;
     
     return a + b + b;
 end)
 
--- callCppFunction("_Z11hook_c_funcii", {1,1,1}, 1, 2)
+DyHookCore.callCppFunction("_Z11hook_c_funcii", 3, 4)
+

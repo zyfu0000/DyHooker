@@ -33,6 +33,7 @@ extern "C" {
 #define DYH_TYPE_STRUCT     13
 #define DYH_TYPE_POINTER    14
 #define DYH_TYPE_COMPLEX    15
+#define DYH_TYPE_BOOL       16
 
 void register_with_lua(lua_State* L);
 
