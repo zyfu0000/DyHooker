@@ -21,22 +21,17 @@ extern "C" {
 
 using namespace std;
 
-struct custom_data {
-    ffi_type *returnType;
-    ffi_type** argTypes;
-    int8_t argCount;
-    void *origin_func_pointer;
-    luabridge::LuaRef *luaFunc;
-};
-
 struct HookFuncInfo {
     string frameworkName;
     string funcName;
     int8_t returnType;
     int8_t* argTypes;
+    ffi_type *ffiReturnType;
+    ffi_type** ffiArgTypes;
     int8_t argCount;
     void *origin_func_pointer;
     void *replace_func_pointer;
+    luabridge::LuaRef *luaFunc;
 };
 
 unordered_map<string, HookFuncInfo *> gSymbolMap;
@@ -56,11 +51,11 @@ luabridge::LuaRef callLuaFunction(luabridge::LuaRef& func, const vector<luabridg
 
 void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) {
     // 调用原实现
-    custom_data *customData = (custom_data *)userdata;
+    HookFuncInfo *info = (HookFuncInfo *)userdata;
     
-    ffi_type *returnType = customData->returnType;
-    ffi_type** argTypes = customData->argTypes;
-    int8_t argCount = customData->argCount;
+    ffi_type *returnType = info->ffiReturnType;
+    ffi_type** argTypes = info->ffiArgTypes;
+    int8_t argCount = info->argCount;
     
 //    ffi_cif cif2;
 //    if (ffi_prep_cif(&cif2, FFI_DEFAULT_ABI, argCount, returnType, argTypes) == FFI_OK) {
@@ -71,7 +66,7 @@ void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) 
 //    }
     
     // call lua function
-    luabridge::LuaRef *luaFunc = customData->luaFunc;
+    luabridge::LuaRef *luaFunc = info->luaFunc;
     if (!luaFunc->isFunction()) {
         throw runtime_error("LuaRef is not a function");
     }
@@ -110,7 +105,7 @@ void replacement_function(ffi_cif* cif, void* ret, void** args, void* userdata) 
 }
 
 // 使用 libffi 构造一个函数指针
-void* create_function_pointer(ffi_type *returnType, ffi_type** argTypes, int8_t argCount, void *origin_func_pointer, luabridge::LuaRef *func) {
+void* create_function_pointer(const char* symbol, ffi_type *returnType, ffi_type** argTypes, int8_t argCount, void *origin_func_pointer, luabridge::LuaRef *func) {
     ffi_cif *cif = new ffi_cif;
     
     // 准备调用接口
@@ -128,15 +123,13 @@ void* create_function_pointer(ffi_type *returnType, ffi_type** argTypes, int8_t 
         return nullptr;
     }
     
-    custom_data *customData = new custom_data();
-    customData->argCount = argCount;
-    customData->returnType = returnType;
-    customData->argTypes = argTypes;
-    customData->origin_func_pointer = origin_func_pointer;
-    customData->luaFunc = func;
+    HookFuncInfo *info = gSymbolMap[symbol];
+    info->ffiReturnType = returnType;
+    info->ffiArgTypes = argTypes;
+    info->luaFunc = func;
     
     // 设置函数指针的实现
-    if (ffi_prep_closure_loc(closure, cif, replacement_function, customData, function_pointer) != FFI_OK) {
+    if (ffi_prep_closure_loc(closure, cif, replacement_function, info, function_pointer) != FFI_OK) {
         printf("Failed to prepare closure");
         ffi_closure_free(closure);
         delete cif;
@@ -256,7 +249,7 @@ void hook_func(const char* framework, const char* symbol, int8_t returnType, int
     for (int8_t i = 0; i < argCount; i++) {
         ffi_arg_types[i] = getFFIType(argTypes[i]);
     }
-    void* replacement_func_pointer = create_function_pointer(ffi_return_type, ffi_arg_types, argCount, origin_func_pointer, func);
+    void* replacement_func_pointer = create_function_pointer(symbol, ffi_return_type, ffi_arg_types, argCount, origin_func_pointer, func);
     if (replacement_func_pointer == nullptr) {
         printf("Failed to create function pointer");
         return;
@@ -269,7 +262,7 @@ void hook_func(const char* framework, const char* symbol, int8_t returnType, int
 void call_func(const char* framework, const char* symbol, int8_t returnType, int8_t* argTypes, int8_t argCount, void* ret, void** args) {
     HookFuncInfo *info = gSymbolMap[symbol];
     void *func_pointer = nullptr;
-    if (info) {
+    if (info && info->replace_func_pointer) {
         func_pointer = info->replace_func_pointer;
     }
     else {

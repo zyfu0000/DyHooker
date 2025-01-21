@@ -1,4 +1,37 @@
-local classObject = { className = "NSObject" }
+local instanceObject = { point = nilObject}
+function instanceObject:new(o)
+    o = o or {}
+    setmetatable(o,self)--设置instanceObject对象为生成对象o的元表
+    self.__index = function ( self, key )--设置全局instanceObject对象的__index是一个函数
+        --假如键是super，返回一个函数，调用这个函数生成isSuper为true的对象
+        if key == "super" then
+            return function ( ... )
+                return instanceObject:new({point = self.point, isSuper = true})
+            end
+        end
+        return function ( ... )
+            local method = key
+            --假如是调用super的情况
+            local arglist = buildArgList(...)
+            printLog("call callI in instanceObject instance:",self.point,"method",method)
+            printLog("arglist")
+            printLog(tableToStr(arglist))
+            local ret = nil
+            if self.isSuper == true then
+                ret = luapatch_core.callSuperI(self.point,method,table.unpack(arglist))
+            else
+                ret = luapatch_core.callI(self.point,method,table.unpack(arglist))
+            end
+            if type(ret) == "userdata" then
+                return instanceObject:new({point = ret})
+            end
+            return ret
+        end
+    end
+    return o
+end
+
+local classObject = { className = "UObject" }
 function classObject:new(o)
     o = o or {}
     setmetatable(o,self)
